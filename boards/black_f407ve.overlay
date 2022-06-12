@@ -1,0 +1,5 @@
+
+
+&usart2 {
+	current-speed = <2000000>;
+};
