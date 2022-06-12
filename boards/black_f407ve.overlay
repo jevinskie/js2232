@@ -1,12 +1,10 @@
-
-
-
 / {
 	model = "black_f407ve board";
 	compatible = "st,stm32f407";
 
 	chosen {
-		zephyr,shell-uart = &usart1;
+		zephyr,console = &usart2;
+		zephyr,shell-uart = &usart6;
 	};
 };
 
@@ -17,4 +15,11 @@
 
 &usart2 {
 	current-speed = <2000000>;
+};
+
+&usart6 {
+	pinctrl-0 = <&usart6_tx_pc6 &usart6_rx_pc7>;
+	pinctrl-names = "default";
+	current-speed = <2000000>;
+	status = "okay";
 };
