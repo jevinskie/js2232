@@ -176,7 +176,7 @@ static void loopback_out_cb(uint8_t ep, enum usb_dc_ep_cb_status_code ep_status)
 }
 
 static void loopback_in_cb(uint8_t ep, enum usb_dc_ep_cb_status_code ep_status) {
-    LOG_INF("%s try ep 0x%x", __FUNCTION__, ep);
+    // LOG_INF("%s try ep 0x%x", __FUNCTION__, ep);
     // if (usb_write(ep, loopback_buf, 4, nullptr)) {
     //     LOG_INF("ep 0x%x", ep);
     // }

@@ -12,10 +12,8 @@ with usb1.USBContext() as ctx:
                 continue
         except usb1.USBErrorAccess:
             pass
-        print(f"dev: {dev}")
         handle = dev.open()
         break
-    print(f"handle: {handle}")
     assert handle
     handle.setAutoDetachKernelDriver(True)
     with handle.claimInterface(0):
