@@ -5,7 +5,7 @@
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/usb/usb_device.h>
 
-#define LOG_LEVEL CONFIG_USB_DEVICE_LOG_LEVEL
+#define LOG_LEVEL 4
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(js2232_usb);
 
@@ -146,13 +146,13 @@ static void loopback_out_cb(uint8_t ep, enum usb_dc_ep_cb_status_code ep_status)
     uint32_t bytes_to_read;
 
     usb_read(ep, NULL, 0, &bytes_to_read);
-    LOG_DBG("ep 0x%x, bytes to read %d ", ep, bytes_to_read);
+    LOG_INF("ep 0x%x, bytes to read %d ", ep, bytes_to_read);
     usb_read(ep, loopback_buf, bytes_to_read, NULL);
 }
 
 static void loopback_in_cb(uint8_t ep, enum usb_dc_ep_cb_status_code ep_status) {
     if (usb_write(ep, loopback_buf, CONFIG_JS2232_BULK_EP_MPS, NULL)) {
-        LOG_DBG("ep 0x%x", ep);
+        LOG_INF("ep 0x%x", ep);
     }
 }
 
@@ -184,13 +184,13 @@ static void loopback_status_cb(struct usb_cfg_data *cfg, enum usb_dc_status_code
     switch (status) {
     case USB_DC_INTERFACE:
         loopback_in_cb(ep_cfg[IF0_IN_EP_IDX].ep_addr, USB_DC_EP_SETUP);
-        LOG_DBG("USB interface configured");
+        LOG_INF("USB interface configured");
         break;
     case USB_DC_SET_HALT:
-        LOG_DBG("Set Feature ENDPOINT_HALT");
+        LOG_INF("Set Feature ENDPOINT_HALT");
         break;
     case USB_DC_CLEAR_HALT:
-        LOG_DBG("Clear Feature ENDPOINT_HALT");
+        LOG_INF("Clear Feature ENDPOINT_HALT");
         if (*param == ep_cfg[IF0_IN_EP_IDX].ep_addr) {
             loopback_in_cb(ep_cfg[IF0_IN_EP_IDX].ep_addr, USB_DC_EP_SETUP);
         }
@@ -202,7 +202,7 @@ static void loopback_status_cb(struct usb_cfg_data *cfg, enum usb_dc_status_code
 
 /* usb.rst vendor handler start */
 static int loopback_vendor_handler(struct usb_setup_packet *setup, int32_t *len, uint8_t **data) {
-    LOG_DBG("Class request: bRequest 0x%x bmRequestType 0x%x len %d", setup->bRequest,
+    LOG_INF("Class request: bRequest 0x%x bmRequestType 0x%x len %d", setup->bRequest,
             setup->bmRequestType, *len);
 
     if (setup->RequestType.recipient != USB_REQTYPE_RECIPIENT_DEVICE) {
@@ -210,7 +210,7 @@ static int loopback_vendor_handler(struct usb_setup_packet *setup, int32_t *len,
     }
 
     if (usb_reqtype_is_to_device(setup) && setup->bRequest == 0x5b) {
-        LOG_DBG("Host-to-Device, data %p", *data);
+        LOG_INF("Host-to-Device, data %p", *data);
         /*
          * Copy request data in loopback_buf buffer and reuse
          * it later in control device-to-host transfer.
@@ -220,7 +220,7 @@ static int loopback_vendor_handler(struct usb_setup_packet *setup, int32_t *len,
     }
 
     if ((usb_reqtype_is_to_host(setup)) && (setup->bRequest == 0x5c)) {
-        LOG_DBG("Device-to-Host, wLength %d, data %p", setup->wLength, *data);
+        LOG_INF("Device-to-Host, wLength %d, data %p", setup->wLength, *data);
         *data = loopback_buf;
         *len  = MIN(sizeof(loopback_buf), setup->wLength);
         return 0;
