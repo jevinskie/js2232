@@ -16,7 +16,7 @@ void main(void) {
 
     printk("Hello World! %s\n", CONFIG_BOARD);
 
-    ret = usb_enable(NULL);
+    ret = usb_enable(nullptr);
     if (ret != 0) {
         LOG_ERR("Failed to enable USB");
         return;
