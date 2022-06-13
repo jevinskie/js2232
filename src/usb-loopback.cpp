@@ -142,13 +142,34 @@ struct usb_common_descriptor common_desc = {
         },
 };
 
+static void invert_buf(uint8_t *buf, uint16_t len) {
+    uint8_t *p8 = buf;
+    while (len && (uintptr_t)p8 & 0b11) {
+        *p8 = *p8 ^ 0xff;
+        ++p8;
+        len -= sizeof(*p8);
+    }
+    uint32_t *p32 = (uint32_t *)p8;
+    while (len >= 4) {
+        *p32 = *p32 ^ 0xffffffff;
+        ++p32;
+        len -= sizeof(*p32);
+    }
+    p8 = (uint8_t *)p32;
+    while (len) {
+        *p8 = *p8 ^ 0xff;
+        ++p8;
+        len -= sizeof(*p8);
+    }
+}
+
 static void loopback_out_cb(uint8_t ep, enum usb_dc_ep_cb_status_code ep_status) {
     uint32_t bytes_to_read;
 
     usb_read(ep, nullptr, 0, &bytes_to_read);
-    LOG_INF("ep 0x%x, bytes to read %d ", ep, bytes_to_read);
+    // LOG_INF("ep 0x%x, bytes to read %d ", ep, bytes_to_read);
     usb_read(ep, loopback_buf, bytes_to_read, nullptr);
-    LOG_HEXDUMP_INF(loopback_buf, bytes_to_read, "out ep read: ");
+    invert_buf(loopback_buf, bytes_to_read);
     if (usb_write(ep | 0x80, loopback_buf, bytes_to_read, nullptr)) {
         LOG_INF("wtf ep 0x%x", ep);
     }
@@ -156,9 +177,9 @@ static void loopback_out_cb(uint8_t ep, enum usb_dc_ep_cb_status_code ep_status)
 
 static void loopback_in_cb(uint8_t ep, enum usb_dc_ep_cb_status_code ep_status) {
     LOG_INF("%s try ep 0x%x", __FUNCTION__, ep);
-    if (usb_write(ep, loopback_buf, 4, nullptr)) {
-        LOG_INF("ep 0x%x", ep);
-    }
+    // if (usb_write(ep, loopback_buf, 4, nullptr)) {
+    //     LOG_INF("ep 0x%x", ep);
+    // }
 }
 
 static struct usb_ep_cfg_data ep_cfg[] = {
@@ -211,23 +232,6 @@ static int loopback_vendor_handler(struct usb_setup_packet *setup, int32_t *len,
 
     if (setup->RequestType.recipient != USB_REQTYPE_RECIPIENT_DEVICE) {
         return -ENOTSUP;
-    }
-
-    if (usb_reqtype_is_to_device(setup) && setup->bRequest == 0x5b) {
-        LOG_INF("Host-to-Device, data %p", *data);
-        /*
-         * Copy request data in loopback_buf buffer and reuse
-         * it later in control device-to-host transfer.
-         */
-        memcpy(loopback_buf, *data, MIN(sizeof(loopback_buf), setup->wLength));
-        return 0;
-    }
-
-    if ((usb_reqtype_is_to_host(setup)) && (setup->bRequest == 0x5c)) {
-        LOG_INF("Device-to-Host, wLength %d, data %p", setup->wLength, *data);
-        *data = loopback_buf;
-        *len  = MIN(sizeof(loopback_buf), setup->wLength);
-        return 0;
     }
 
     return -ENOTSUP;
