@@ -2,3 +2,4 @@ build/
 .vscode/
 .gdb_history
 .nogef
+host_tools/loopback_async_test
