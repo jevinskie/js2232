@@ -5,7 +5,7 @@ import time
 
 import usb1
 
-PACKET_SIZE = 64
+PACKET_SIZE = 512
 
 with usb1.USBContext() as ctx:
     handle = None
