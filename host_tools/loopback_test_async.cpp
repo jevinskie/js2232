@@ -1,3 +1,4 @@
+#undef NDEBUG
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -14,7 +15,28 @@ constexpr int EP_SIZE   = 64;
 static_assert(PACKET_SZ % EP_SIZE == 0, "Packet size not multiple of endpoint size");
 
 using buf_t      = std::vector<uint8_t>;
-using buf_list_t = std::vector<std::shared_ptr<buf_t>>;
+using buf_ptr_t  = std::shared_ptr<buf_t>;
+using buf_list_t = std::vector<buf_ptr_t>;
+
+class xfer_t {
+public:
+    xfer_t(const buf_ptr_t &buf_ptr) : m_buf_ptr(buf_ptr) {
+        assert(m_buf_ptr->size() <= EP_SIZE);
+    }
+
+    void on_complete(void) {
+        fmt::print("{:s}\n", __PRETTY_FUNCTION__);
+    }
+
+    const buf_ptr_t &buf() const {
+        return m_buf_ptr;
+    }
+
+private:
+    const buf_ptr_t &m_buf_ptr;
+};
+
+using xfer_list_t = std::vector<xfer_t>;
 
 libusb_context *usb_ctx          = nullptr;
 libusb_device *dev               = nullptr;
@@ -51,6 +73,15 @@ buf_list_t chunk_buf(const buf_t &buf, size_t chunk_sz) {
         res.emplace_back(cur_chunk);
         sz -= cur_chunk_sz;
         p += cur_chunk_sz;
+    }
+    return res;
+}
+
+xfer_list_t get_xfers(const buf_t &buf) {
+    xfer_list_t res;
+    res.reserve(std::ceil(buf.size() / (double)EP_SIZE));
+    for (const buf_ptr_t &buf_ptr : chunk_buf(buf, EP_SIZE)) {
+        res.emplace_back(xfer_t{buf_ptr});
     }
     return res;
 }
