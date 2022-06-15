@@ -75,11 +75,11 @@ with usb1.USBContext() as ctx:
             while True:
                 if args.loop_bulk:
                     obuf = bytearray(random.randbytes(PACKET_SIZE))
-                    print(f"obuf: {obuf.hex(' ')}")
+                    # print(f"obuf: {obuf.hex(' ')}")
                     handle.bulkWrite(1, obuf, timeout=1000)
                     ibuf = handle.bulkRead(1, PACKET_SIZE, timeout=1000)
                     ibuf_inv = bytes([b ^ 0xFF for b in ibuf])
-                    print(f"Ibuf: {ibuf_inv.hex(' ')}")
+                    # print(f"Ibuf: {ibuf_inv.hex(' ')}")
                     assert ibuf_inv == obuf
                     nbytes += len(obuf) * 2
                 elif args.out_bulk:
