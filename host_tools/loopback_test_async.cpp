@@ -9,6 +9,9 @@
 
 #include <fmt/format.h>
 #include <libusb-1.0/libusb.h>
+#include <unique_resource.h>
+
+using namespace sr;
 
 constexpr int PACKET_SZ = 128;
 constexpr int EP_SIZE   = 64;
@@ -18,21 +21,24 @@ using buf_t      = std::vector<uint8_t>;
 using buf_ptr_t  = std::shared_ptr<buf_t>;
 using buf_list_t = std::vector<buf_ptr_t>;
 
+static auto alloc_transfer = []() {
+    return libusb_alloc_transfer(0);
+};
+using libusb_xfer_t =
+    decltype(make_unique_resource_checked(libusb_alloc_transfer(0), nullptr, libusb_free_transfer));
+
 class xfer_t {
 public:
     xfer_t(libusb_device_handle *dev_handle, int ep, buf_ptr_t buf_ptr, int timeout = 1000,
            buf_ptr_t gold = nullptr)
-        : m_buf_ptr(buf_ptr), m_usb_xfer(libusb_alloc_transfer(0)), m_in_cb(false), m_ep(ep),
-          m_dev_handle(dev_handle), m_timeout(timeout), m_gold(gold) {
+        : m_buf_ptr(buf_ptr), m_usb_xfer(make_unique_resource_checked(
+                                  libusb_alloc_transfer(0), nullptr, libusb_free_transfer)),
+          m_in_cb(false), m_ep(ep), m_dev_handle(dev_handle), m_timeout(timeout), m_gold(gold) {
         assert(m_buf_ptr->size() <= EP_SIZE);
-        assert(m_usb_xfer);
+        assert(m_usb_xfer.get());
         assert(m_dev_handle);
-        libusb_fill_bulk_transfer(m_usb_xfer, m_dev_handle, m_ep, buf_ptr->data(), buf_ptr->size(),
-                                  completed_c_cb, this, m_timeout);
-    }
-
-    ~xfer_t() {
-        libusb_free_transfer(m_usb_xfer);
+        libusb_fill_bulk_transfer(m_usb_xfer.get(), m_dev_handle, m_ep, buf_ptr->data(),
+                                  buf_ptr->size(), completed_c_cb, this, m_timeout);
     }
 
     bool is_in() const {
@@ -49,7 +55,8 @@ public:
     }
 
     void submit() {
-        libusb_submit_transfer(m_usb_xfer);
+        fmt::print("submit\n");
+        libusb_submit_transfer(m_usb_xfer.get());
     }
 
     void on_complete() {
@@ -69,7 +76,7 @@ public:
 
 private:
     buf_ptr_t m_buf_ptr;
-    libusb_transfer *m_usb_xfer;
+    libusb_xfer_t m_usb_xfer;
     bool m_in_cb;
     const int m_ep;
     libusb_device_handle *m_dev_handle;
@@ -123,9 +130,12 @@ xfer_list_t get_xfers(libusb_device_handle *dev_handle, int ep, const buf_t &buf
     res.reserve(std::ceil(buf.size() / (double)EP_SIZE) * 2);
     for (auto &buf_ptr : chunk_buf(buf, EP_SIZE)) {
         res.emplace_back(xfer_t{dev_handle, ep, buf_ptr});
+        fmt::print("emplace_back out done\n");
         auto in_buf_ptr = std::make_shared<buf_t>(buf_ptr->size());
-        res.emplace_back(xfer_t{dev_handle, ep | 0x80, in_buf_ptr, 1000, buf_ptr});
+        res.emplace_back(std::move(xfer_t{dev_handle, ep | 0x80, in_buf_ptr, 1000, buf_ptr}));
+        fmt::print("emplace_back in done\n");
     }
+    fmt::print("get_xfers done\n");
     return res;
 }
 
@@ -135,6 +145,7 @@ int main(int argc, const char **argv) {
     assert(!libusb_init(&usb_ctx));
 
     assert(!libusb_set_option(usb_ctx, LIBUSB_OPTION_LOG_LEVEL, LIBUSB_LOG_LEVEL_INFO));
+    // assert(!libusb_set_option(usb_ctx, LIBUSB_OPTION_LOG_LEVEL, LIBUSB_LOG_LEVEL_DEBUG));
 
     // discover devices
     libusb_device **list;
@@ -160,7 +171,6 @@ int main(int argc, const char **argv) {
             prod_buf[sizeof(prod_buf) - 1] = '\0';
             fmt::print("cur_dev_handle: {:p} prod_buf: {:s}\n", fmt::ptr(cur_dev_handle), prod_buf);
             if (!strcmp(prod_buf, "js2232")) {
-                assert(!libusb_set_auto_detach_kernel_driver(cur_dev_handle, true));
                 dev        = cur_dev;
                 dev_handle = cur_dev_handle;
                 break;
@@ -179,6 +189,10 @@ int main(int argc, const char **argv) {
     }
     fmt::print("got 'em\n");
 
+    assert(!libusb_set_auto_detach_kernel_driver(dev_handle, true));
+    auto claim_err = libusb_claim_interface(dev_handle, 0);
+    fmt::print("claim_error: {:d}\n", claim_err);
+
     if (false) {
         const auto obuf = gen_aa5500ff_buf(EP_SIZE);
         hexdump("obuf", obuf);
@@ -196,6 +210,7 @@ int main(int argc, const char **argv) {
         const auto obuf = gen_aa5500ff_buf(PACKET_SZ);
         auto xfer_list  = get_xfers(dev_handle, 1, obuf);
         for (auto &xfer : xfer_list) {
+            fmt::print("xfer\n");
             xfer.submit();
         }
         if (i > 1) {

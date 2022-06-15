@@ -1,7 +1,7 @@
 TARGETS := loopback_test_async
 all: $(TARGETS)
 
-CXXFLAGS += -Wall -Wextra -g -std=c++20
+CXXFLAGS += -Wall -Wextra -g -std=c++20 -I ../3rdparty/scope-guard/include
 LDFLAGS +=
 LDLIBS +=  -lusb-1.0 -lfmt
 
