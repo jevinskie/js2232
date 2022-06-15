@@ -21,6 +21,10 @@ LOG_MODULE_REGISTER(js2232_usb);
 #define IF1_IN_EP_IDX 3
 #define IF1_OUT_EP_IDX 4
 
+// #define LOOPBACK_TEST
+// #define OUT_TEST
+#define IN_TEST
+
 static uint8_t loopback_buf[1024];
 BUILD_ASSERT(sizeof(loopback_buf) == CONFIG_USB_REQUEST_BUFFER_SIZE);
 
@@ -182,13 +186,35 @@ static void loopback_in_cb(uint8_t ep, enum usb_dc_ep_cb_status_code ep_status) 
     // }
 }
 
+void xfer_cb(uint8_t ep, int tsize, void *was_in) {
+    // LOG_INF("ep: %d sz: %d priv: %d", ep, tsize, (int)was_in);
+#if defined(LOOPBACK_TEST)
+    if (!was_in) {
+        invert_buf(loopback_buf, tsize);
+        usb_transfer(0x81, loopback_buf, tsize, USB_TRANS_WRITE | USB_TRANS_NO_ZLP, xfer_cb,
+                     (void *)1);
+    } else {
+        usb_transfer(1, loopback_buf, sizeof(loopback_buf), USB_TRANS_READ | USB_TRANS_NO_ZLP,
+                     xfer_cb, (void *)0);
+    }
+#elif defined(OUT_TEST)
+    usb_transfer(1, loopback_buf, sizeof(loopback_buf), USB_TRANS_READ | USB_TRANS_NO_ZLP, xfer_cb,
+                 (void *)0);
+#elif defined(IN_TEST)
+    usb_transfer(0x81, loopback_buf, sizeof(loopback_buf), USB_TRANS_WRITE | USB_TRANS_NO_ZLP,
+                 xfer_cb, (void *)1);
+#else
+#error Must define a test mode
+#endif
+}
+
 static struct usb_ep_cfg_data ep_cfg[] = {
     {
-        .ep_cb   = loopback_out_cb,
+        .ep_cb   = usb_transfer_ep_callback,
         .ep_addr = IF0_OUT_EP_ADDR,
     },
     {
-        .ep_cb   = loopback_in_cb,
+        .ep_cb   = usb_transfer_ep_callback,
         .ep_addr = IF0_IN_EP_ADDR,
     },
     // {
@@ -221,6 +247,20 @@ static void loopback_status_cb(struct usb_cfg_data *cfg, enum usb_dc_status_code
             loopback_in_cb(ep_cfg[IF0_IN_EP_IDX].ep_addr, USB_DC_EP_SETUP);
         }
         break;
+    case USB_DC_CONFIGURED:
+        LOG_INF("Configured");
+#if defined(LOOPBACK_TEST)
+        usb_transfer(1, loopback_buf, sizeof(loopback_buf), USB_TRANS_READ | USB_TRANS_NO_ZLP,
+                     xfer_cb, (void *)0);
+#elif defined(OUT_TEST)
+        usb_transfer(1, loopback_buf, sizeof(loopback_buf), USB_TRANS_READ | USB_TRANS_NO_ZLP,
+                     xfer_cb, (void *)0);
+#elif defined(IN_TEST)
+        usb_transfer(0x81, loopback_buf, sizeof(loopback_buf), USB_TRANS_WRITE | USB_TRANS_NO_ZLP,
+                     xfer_cb, (void *)1);
+#else
+#error Must define a test mode
+#endif
     default:
         break;
     }

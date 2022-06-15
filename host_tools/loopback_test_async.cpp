@@ -13,7 +13,7 @@
 
 using namespace sr;
 
-constexpr int PACKET_SZ = 128;
+constexpr int PACKET_SZ = 64;
 constexpr int EP_SIZE   = 64;
 static_assert(PACKET_SZ % EP_SIZE == 0, "Packet size not multiple of endpoint size");
 
@@ -21,24 +21,30 @@ using buf_t      = std::vector<uint8_t>;
 using buf_ptr_t  = std::shared_ptr<buf_t>;
 using buf_list_t = std::vector<buf_ptr_t>;
 
-static auto alloc_transfer = []() {
-    return libusb_alloc_transfer(0);
-};
+// static auto free_transfer = [](libusb_transfer *xfer) {
+//     fmt::print("free xfer: {:p}\n", fmt::ptr(xfer));
+//     libusb_free_transfer(xfer);
+// };
+constexpr auto free_transfer = libusb_free_transfer;
 using libusb_xfer_t =
-    decltype(make_unique_resource_checked(libusb_alloc_transfer(0), nullptr, libusb_free_transfer));
+    decltype(make_unique_resource_checked(libusb_alloc_transfer(0), nullptr, free_transfer));
 
 class xfer_t {
 public:
     xfer_t(libusb_device_handle *dev_handle, int ep, buf_ptr_t buf_ptr, int timeout = 1000,
            buf_ptr_t gold = nullptr)
-        : m_buf_ptr(buf_ptr), m_usb_xfer(make_unique_resource_checked(
-                                  libusb_alloc_transfer(0), nullptr, libusb_free_transfer)),
-          m_in_cb(false), m_ep(ep), m_dev_handle(dev_handle), m_timeout(timeout), m_gold(gold) {
+        : m_buf_ptr(buf_ptr), m_usb_xfer(make_unique_resource_checked(libusb_alloc_transfer(0),
+                                                                      nullptr, free_transfer)),
+          m_in_cb(false), m_ep(ep), m_dev_handle(dev_handle), m_timeout(timeout), m_gold(gold),
+          m_completed(false) {
         assert(m_buf_ptr->size() <= EP_SIZE);
         assert(m_usb_xfer.get());
         assert(m_dev_handle);
+        fmt::print("this ctor: {:p}\n", fmt::ptr(this));
+        fmt::print("ctor status:  {:d}\n", m_usb_xfer->status);
         libusb_fill_bulk_transfer(m_usb_xfer.get(), m_dev_handle, m_ep, buf_ptr->data(),
                                   buf_ptr->size(), completed_c_cb, this, m_timeout);
+        fmt::print("ctor status2: {:d}\n", m_usb_xfer->status);
     }
 
     bool is_in() const {
@@ -51,7 +57,7 @@ public:
     }
 
     bool completed() const {
-        return status() == LIBUSB_TRANSFER_COMPLETED;
+        return m_completed;
     }
 
     void submit() {
@@ -60,7 +66,8 @@ public:
     }
 
     void on_complete() {
-        m_in_cb = true;
+        m_in_cb     = true;
+        m_completed = true;
         fmt::print("{:s} status: {:d}\n", __PRETTY_FUNCTION__, status());
         m_in_cb = false;
     }
@@ -71,7 +78,8 @@ public:
 
     static void completed_c_cb(struct libusb_transfer *transfer) {
         auto *thiz = (xfer_t *)transfer->user_data;
-        thiz->completed();
+        fmt::print("this ctor: {:p}\n", fmt::ptr(thiz));
+        thiz->on_complete();
     }
 
 private:
@@ -82,6 +90,7 @@ private:
     libusb_device_handle *m_dev_handle;
     int m_timeout;
     buf_ptr_t m_gold;
+    bool m_completed;
 };
 
 using xfer_list_t = std::vector<xfer_t>;
@@ -212,6 +221,19 @@ int main(int argc, const char **argv) {
         for (auto &xfer : xfer_list) {
             fmt::print("xfer\n");
             xfer.submit();
+        }
+        while (true) {
+            bool all_completed = true;
+            for (auto &xfer : xfer_list) {
+                all_completed &= xfer.completed();
+            }
+            if (all_completed) {
+                break;
+            }
+            struct timeval timeout {
+                .tv_sec = 1, .tv_usec = 0
+            };
+            libusb_handle_events_timeout(usb_ctx, &timeout);
         }
         if (i > 1) {
             break;

@@ -2,7 +2,7 @@
 
 import usb1
 
-PACKET_SIZE = 64
+PACKET_SIZE = 1024
 
 with usb1.USBContext() as ctx:
     handle = None

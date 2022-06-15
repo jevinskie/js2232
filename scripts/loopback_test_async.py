@@ -8,7 +8,7 @@ from functools import partial
 import usb1
 from more_itertools import chunked
 
-PACKET_SIZE = 128
+PACKET_SIZE = 1024
 EP_SIZE = 64
 assert PACKET_SIZE % EP_SIZE == 0
 
@@ -36,11 +36,11 @@ with usb1.USBContext() as ctx:
         tstart = time.time()
         queue = deque()
 
-        def xfer_out_cb(xfer_in, xfer_out):
+        def xfer_out_cb(xfer):
             # print(f"out status: {xfer.getStatus()}")
-            assert xfer_out.getStatus() == usb1.TRANSFER_COMPLETED
+            assert xfer.getStatus() == usb1.TRANSFER_COMPLETED
             # xfer_out.submit()
-            xfer_in.submit()
+            # xfer_in.submit()
 
         def xfer_in_cb(xfer):
             assert xfer.getStatus() == usb1.TRANSFER_COMPLETED
@@ -52,33 +52,40 @@ with usb1.USBContext() as ctx:
             # xfer.submit()
 
         try:
-            while nbytes < 25600:
+            while True:
                 # obuf = random.randbytes(PACKET_SIZE)
                 obuf = b"\xaa\x55\x00\xff" * (PACKET_SIZE // 4)
                 obuf_chunks = chunked(obuf, EP_SIZE)
-                xfer_list = []
+                xfer_out_list = []
+                xfer_in_list = []
                 for chunk in obuf_chunks:
                     xfer_out = handle.getTransfer()
                     xfer_in = handle.getTransfer()
                     xfer_out.setBulk(
                         1,
                         len(chunk),
-                        callback=partial(xfer_out_cb, xfer_in),
+                        callback=xfer_out_cb,
                         timeout=1000,
                     )
                     xfer_out.setBuffer(chunk)
-                    xfer_list.append(xfer_out)
+                    xfer_out_list.append(xfer_out)
                     xfer_in.setBulk(0x81, len(chunk), callback=xfer_in_cb, timeout=1000)
-                    xfer_list.append(xfer_in)
+                    xfer_in_list.append(xfer_in)
                     xfer_out.submit()
                     queue.appendleft(chunk)
-                while any(x.isSubmitted() for x in xfer_list):
+                while any(x.isSubmitted() for x in xfer_out_list):
                     try:
                         ctx.handleEvents()
                     except usb1.USBErrorInterrupted:
                         pass
-                time.sleep(0.01)
-                nbytes += len(obuf)
+                for xfer in xfer_in_list:
+                    xfer.submit()
+                while any(x.isSubmitted() for x in xfer_in_list):
+                    try:
+                        ctx.handleEvents()
+                    except usb1.USBErrorInterrupted:
+                        pass
+                nbytes += len(obuf) * 2
                 if nbytes % (1024 * EP_SIZE) == 0:
                     print(".", end="", flush=True)
         except KeyboardInterrupt:
