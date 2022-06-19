@@ -38,13 +38,14 @@ def main(args):
                     obuf = bytearray(random.randbytes(PACKET_SIZE))
                     print(f"obuf: {obuf.hex(' ')}")
                     handle.bulkWrite(1, obuf, timeout=1000)
-                    ibuf = handle.bulkRead(2, PACKET_SIZE, timeout=1000)
+                    ibuf = handle.bulkRead(1, PACKET_SIZE, timeout=1000)
                     ibuf_inv = bytes([b ^ 0xFF for b in ibuf])
                     print(f"Ibuf: {ibuf_inv.hex(' ')}")
                     assert ibuf_inv == obuf
                     nbytes += len(obuf) * 2
                     if nbytes % (16 * 1024) == 0:
                         print(".", end="", flush=True)
+                    time.sleep(0.001)
             except KeyboardInterrupt:
                 pass
             tend = time.time()
