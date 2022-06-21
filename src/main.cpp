@@ -13,11 +13,9 @@ static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(LED0_NODE, gpios);
 
 #define USB_NODE DT_NODELABEL(usb)
 PINCTRL_DT_DEFINE(USB_NODE);
-// #define USB_NODE DT_ALIAS(usb)
-// static const struct pinctrl_dev_config *usb_pcfg = PINCTRL_DT_DEV_CONFIG_GET(DT_NODELABEL(usb));
 
 static void usb_bus_reset() {
-    PINCTRL_DT_DEV_CONFIG_GET(USB_NODE);
+    const auto *pc_dev = PINCTRL_DT_DEV_CONFIG_GET(USB_NODE);
 }
 
 void main(void) {

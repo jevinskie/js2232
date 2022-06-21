@@ -8,3 +8,8 @@
 	pinctrl-0 = <&usart1_tx_remap1_pb6 &usart1_rx_remap1_pb7>;
 	current-speed = <2000000>;
 };
+
+// &usb {
+// 	pinctrl-1 = <&usb_dm_pa11 &usb_dp_pa12>;
+// 	pinctrl-names = "default", "gpio";
+// };
