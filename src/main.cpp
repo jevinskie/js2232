@@ -11,19 +11,11 @@ LOG_MODULE_REGISTER(main);
 #define LED0_NODE DT_ALIAS(led0)
 static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(LED0_NODE, gpios);
 
-#define USB_NODE DT_NODELABEL(usb)
-PINCTRL_DT_DEFINE(USB_NODE);
-
-static void usb_bus_reset() {
-    const auto *pc_dev = PINCTRL_DT_DEV_CONFIG_GET(USB_NODE);
-}
-
 void main(void) {
     int ret;
 
     printk("Hello World! %s\n", CONFIG_BOARD);
 
-    usb_bus_reset();
     ret = usb_enable(nullptr);
     if (ret != 0) {
         LOG_ERR("Failed to enable USB");
