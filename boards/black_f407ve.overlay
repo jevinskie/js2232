@@ -1,7 +1,4 @@
 / {
-	model = "black_f407ve board";
-	compatible = "st,stm32f407";
-
 	chosen {
 		zephyr,console = &usart2;
 		zephyr,shell-uart = &usart6;

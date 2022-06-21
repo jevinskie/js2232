@@ -16,14 +16,6 @@ constexpr int IF0_OUT_EP_ADDR = 0x01;
 constexpr int IF0_IN_EP_IDX  = 0;
 constexpr int IF0_OUT_EP_IDX = 1;
 
-constexpr int IF1_IN_EP_ADDR = 0x82;
-
-constexpr int IF1_IN_EP_IDX = 3;
-
-constexpr int IF2_OUT_EP_ADDR = 0x03;
-
-constexpr int IF2_OUT_EP_IDX = 4;
-
 constexpr uint8_t REQ_SET_TEST_MODE = 0x42;
 constexpr uint8_t REQ_SET_PACKET_SZ = 0x43;
 
@@ -44,10 +36,6 @@ struct usb_loopback_config {
     struct usb_if_descriptor if0;
     struct usb_ep_descriptor if0_in_ep;
     struct usb_ep_descriptor if0_out_ep;
-    struct usb_if_descriptor if1;
-    struct usb_ep_descriptor if1_in_ep;
-    struct usb_if_descriptor if2;
-    struct usb_ep_descriptor if2_out_ep;
 } __packed;
 
 USBD_CLASS_DESCR_DEFINE(primary, 0)
@@ -87,56 +75,6 @@ struct usb_loopback_config loopback_cfg = {
             .wMaxPacketSize   = sys_cpu_to_le16(CONFIG_JS2232_BULK_EP_MPS),
             .bInterval        = 0x00,
         },
-
-    /* Interface descriptor 1 */
-    .if1 =
-        {
-            .bLength            = sizeof(struct usb_if_descriptor),
-            .bDescriptorType    = USB_DESC_INTERFACE,
-            .bInterfaceNumber   = 1,
-            .bAlternateSetting  = 0,
-            .bNumEndpoints      = 1,
-            .bInterfaceClass    = USB_BCC_VENDOR,
-            .bInterfaceSubClass = 0xFF,
-            .bInterfaceProtocol = 0xFF,
-            .iInterface         = 0,
-        },
-
-    /* Data Endpoint IN 1 */
-    .if1_in_ep =
-        {
-            .bLength          = sizeof(struct usb_ep_descriptor),
-            .bDescriptorType  = USB_DESC_ENDPOINT,
-            .bEndpointAddress = IF1_IN_EP_ADDR,
-            .bmAttributes     = USB_DC_EP_BULK,
-            .wMaxPacketSize   = sys_cpu_to_le16(CONFIG_JS2232_BULK_EP_MPS),
-            .bInterval        = 0x00,
-        },
-
-    /* Interface descriptor 2 */
-    .if2 =
-        {
-            .bLength            = sizeof(struct usb_if_descriptor),
-            .bDescriptorType    = USB_DESC_INTERFACE,
-            .bInterfaceNumber   = 2,
-            .bAlternateSetting  = 0,
-            .bNumEndpoints      = 1,
-            .bInterfaceClass    = USB_BCC_VENDOR,
-            .bInterfaceSubClass = 0xFF,
-            .bInterfaceProtocol = 0xFF,
-            .iInterface         = 0,
-        },
-
-    /* Data Endpoint OUT 2 */
-    .if2_out_ep =
-        {
-            .bLength          = sizeof(struct usb_ep_descriptor),
-            .bDescriptorType  = USB_DESC_ENDPOINT,
-            .bEndpointAddress = IF2_OUT_EP_ADDR,
-            .bmAttributes     = USB_DC_EP_BULK,
-            .wMaxPacketSize   = sys_cpu_to_le16(CONFIG_JS2232_BULK_EP_MPS),
-            .bInterval        = 0x00,
-        },
 };
 
 USBD_DEVICE_DESCR_DEFINE(primary)
@@ -165,7 +103,7 @@ struct usb_common_descriptor common_desc = {
             .bLength             = sizeof(struct usb_cfg_descriptor),
             .bDescriptorType     = USB_DESC_CONFIGURATION,
             .wTotalLength        = 0,
-            .bNumInterfaces      = 3,
+            .bNumInterfaces      = 1,
             .bConfigurationValue = 1,
             .iConfiguration      = 0,
             .bmAttributes        = USB_SCD_RESERVED,
@@ -173,6 +111,8 @@ struct usb_common_descriptor common_desc = {
         },
 };
 
+#pragma GCC push_options
+#pragma GCC optimize(2)
 static void invert_buf(uint8_t *buf, uint16_t len) {
     uint8_t *p8 = buf;
     while (len && (uintptr_t)p8 & 0b11) {
@@ -193,6 +133,22 @@ static void invert_buf(uint8_t *buf, uint16_t len) {
         len -= sizeof(*p8);
     }
 }
+#pragma GCC pop_options
+
+#if 0
+#pragma GCC push_options
+#pragma GCC optimize(2)
+void invert_buf_align32(uint8_t *buf, uint32_t len) {
+    __builtin_assume_aligned(buf, 4);
+    uint32_t *p32 = (uint32_t *)buf;
+    while (len >= 4) {
+        *p32 = *p32 ^ 0xffffffff;
+        ++p32;
+        len -= sizeof(*p32);
+    }
+}
+#pragma GCC pop_options
+#endif
 
 void xfer_cb(uint8_t ep, int tsize, void *was_in) {
     // LOG_INF("ep: %d sz: %d priv: %d", ep, tsize, (int)was_in);
@@ -200,20 +156,20 @@ void xfer_cb(uint8_t ep, int tsize, void *was_in) {
     case LOOPBACK_BULK:
         if (!was_in) {
             invert_buf(loopback_buf, tsize);
-            usb_transfer(0x81, loopback_buf, tsize, USB_TRANS_WRITE | USB_TRANS_NO_ZLP, xfer_cb,
-                         (void *)1);
+            usb_transfer(IF0_IN_EP_ADDR, loopback_buf, tsize, USB_TRANS_WRITE | USB_TRANS_NO_ZLP,
+                         xfer_cb, (void *)1);
         } else {
-            usb_transfer(1, loopback_buf, test_pkt_sz, USB_TRANS_READ | USB_TRANS_NO_ZLP, xfer_cb,
-                         (void *)0);
+            usb_transfer(IF0_OUT_EP_ADDR, loopback_buf, test_pkt_sz,
+                         USB_TRANS_READ | USB_TRANS_NO_ZLP, xfer_cb, (void *)0);
         }
         break;
     case OUT_BULK:
-        usb_transfer(1, loopback_buf, test_pkt_sz, USB_TRANS_READ | USB_TRANS_NO_ZLP, xfer_cb,
-                     (void *)0);
+        usb_transfer(IF0_OUT_EP_ADDR, loopback_buf, test_pkt_sz, USB_TRANS_READ | USB_TRANS_NO_ZLP,
+                     xfer_cb, (void *)0);
         break;
     case IN_BULK:
-        usb_transfer(0x81, loopback_buf, test_pkt_sz, USB_TRANS_WRITE | USB_TRANS_NO_ZLP, xfer_cb,
-                     (void *)1);
+        usb_transfer(IF0_IN_EP_ADDR, loopback_buf, test_pkt_sz, USB_TRANS_WRITE | USB_TRANS_NO_ZLP,
+                     xfer_cb, (void *)1);
         break;
     default:
         assert(!"Invalid test mode");
@@ -229,14 +185,6 @@ static struct usb_ep_cfg_data ep_cfg[] = {
     {
         .ep_cb   = usb_transfer_ep_callback,
         .ep_addr = IF0_IN_EP_ADDR,
-    },
-    {
-        .ep_cb   = usb_transfer_ep_callback,
-        .ep_addr = IF1_IN_EP_ADDR,
-    },
-    {
-        .ep_cb   = usb_transfer_ep_callback,
-        .ep_addr = IF2_OUT_EP_ADDR,
     },
 };
 
