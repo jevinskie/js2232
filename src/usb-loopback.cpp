@@ -182,18 +182,21 @@ static void xfer_cb(uint8_t ep, int tsize, void *was_in) {
 }
 
 static void xfer_rx_cb(uint8_t ep, enum usb_dc_ep_cb_status_code status) {
-    int res            = -1;
-    uint32_t ret_bytes = 0;
-    // LOG_INF("rx_cb: ep: 0x%02x status: %d buf: %02x %02x counter: 0x%08x", ep, status,
-    // loopback_buf[0], loopback_buf[1], counter);
+    int res;
+    uint32_t ret_bytes;
     switch (test_mode) {
     case LOOPBACK_BULK:
         res = usb_read(IF0_OUT_EP_ADDR, loopback_buf, 64, &ret_bytes);
-        // LOG_INF("res: %d buf: %02x %02x", res, loopback_buf[0], loopback_buf[1]);
-        assert(!res && ret_bytes == 64);
+        // assert(!res && ret_bytes == 64);
+        if (res || ret_bytes != 64) {
+            LOG_INF("read fail res: %d ret_bytes: %u", res, ret_bytes);
+        }
         invert_buf(loopback_buf, 64);
-        res = usb_write(IF0_IN_EP_ADDR, loopback_buf, 64, nullptr);
-        assert(res == 0);
+        res = usb_write(IF0_IN_EP_ADDR, loopback_buf, 64, &ret_bytes);
+        // assert(res == 0 && ret_bytes == 64);
+        if (res || ret_bytes != 64) {
+            LOG_INF("write fail res: %d ret_bytes: %u", res, ret_bytes);
+        }
         break;
     case OUT_BULK:
         while (res < 0 || ret_bytes == 0) {

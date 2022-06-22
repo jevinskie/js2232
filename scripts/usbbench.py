@@ -37,7 +37,8 @@ def main(args):
             break
         assert handle
         handle.setAutoDetachKernelDriver(True)
-        cfg0 = next(dev.iterConfigurations())
+        handle.resetDevice()
+        cfg0 = next(handle.getDevice().iterConfigurations())
         interface = cfg0[args.interface]
         setting = interface[0]
         if args.in_test:
