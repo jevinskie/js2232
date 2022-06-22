@@ -92,11 +92,11 @@ def main(args):
             try:
                 while True:
                     obuf = bytearray(random.randbytes(args.pkt_sz))
-                    print(f"obuf: {obuf.hex(' ')}")
+                    # print(f"obuf: {obuf.hex(' ')}")
                     handle.bulkWrite(out_ep_addr, obuf, timeout=1000)
                     ibuf = handle.bulkRead(in_ep_addr, args.pkt_sz, timeout=1000)
                     ibuf_inv = bytes([b ^ 0xFF for b in ibuf])
-                    print(f"Ibuf: {ibuf_inv.hex(' ')}")
+                    # print(f"Ibuf: {ibuf_inv.hex(' ')}")
                     assert ibuf_inv == obuf
                     nbytes += len(obuf) * 2
                     if nbytes % (16 * 1024) == 0:
