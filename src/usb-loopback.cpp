@@ -18,6 +18,7 @@ constexpr int IF0_OUT_EP_IDX = 1;
 
 constexpr uint8_t REQ_SET_TEST_MODE = 0x42;
 constexpr uint8_t REQ_SET_PACKET_SZ = 0x43;
+static uint32_t counter;
 
 enum test_mode_t : uint16_t {
     INVALID_MODE,
@@ -150,7 +151,7 @@ void invert_buf_align32(uint8_t *buf, uint32_t len) {
 #pragma GCC pop_options
 #endif
 
-void xfer_cb(uint8_t ep, int tsize, void *was_in) {
+static void xfer_cb(uint8_t ep, int tsize, void *was_in) {
     // LOG_INF("ep: %d sz: %d priv: %d", ep, tsize, (int)was_in);
     assert(tsize == sizeof(loopback_buf));
     switch (test_mode) {
@@ -178,13 +179,75 @@ void xfer_cb(uint8_t ep, int tsize, void *was_in) {
     }
 }
 
+static void xfer_rx_cb(uint8_t ep, enum usb_dc_ep_cb_status_code status) {
+    int res            = -1;
+    uint32_t ret_bytes = 0;
+    LOG_INF("rx_cb: ep: 0x%02x status: %d buf: %02x %02x counter: 0x%08x", ep, status,
+            loopback_buf[0], loopback_buf[1], counter);
+    switch (test_mode) {
+    case LOOPBACK_BULK:
+        invert_buf(loopback_buf, 64);
+        // while (res < 0) {
+        //     res = usb_write(IF0_IN_EP_ADDR, loopback_buf, 64, nullptr);
+        //     if (res >= 0) {
+        //         assert(res == test_pkt_sz);
+        //     }
+        // }
+        break;
+    case OUT_BULK:
+        while (res < 0 || ret_bytes == 0) {
+            res = usb_read(IF0_OUT_EP_ADDR, loopback_buf, 64, &ret_bytes);
+            if (res >= 0 && ret_bytes) {
+                assert(ret_bytes == test_pkt_sz);
+            }
+        }
+        break;
+    case IN_BULK:
+        assert(!"Invalid test mode");
+        break;
+    default:
+        assert(!"Invalid test mode");
+        break;
+    }
+}
+
+static void xfer_tx_cb(uint8_t ep, enum usb_dc_ep_cb_status_code status) {
+    int res            = -1;
+    uint32_t ret_bytes = 0;
+    LOG_INF("tx_cb: ep: 0x%02x status: %d", ep, status);
+    switch (test_mode) {
+    case LOOPBACK_BULK:
+        while (res < 0 || ret_bytes == 0) {
+            res = usb_read(IF0_OUT_EP_ADDR, loopback_buf, 64, &ret_bytes);
+            if (res >= 0 && ret_bytes) {
+                assert(ret_bytes == test_pkt_sz);
+            }
+        }
+        break;
+    case OUT_BULK:
+        assert(!"Invalid test mode");
+        break;
+    case IN_BULK:
+        while (res < 0) {
+            res = usb_write(IF0_IN_EP_ADDR, loopback_buf, 64, nullptr);
+            if (res >= 0) {
+                assert(res == 64);
+            }
+        }
+        break;
+    default:
+        assert(!"Invalid test mode");
+        break;
+    }
+}
+
 static struct usb_ep_cfg_data ep_cfg[] = {
     {
-        .ep_cb   = usb_transfer_ep_callback,
+        .ep_cb   = xfer_rx_cb,
         .ep_addr = IF0_OUT_EP_ADDR,
     },
     {
-        .ep_cb   = usb_transfer_ep_callback,
+        .ep_cb   = xfer_tx_cb,
         .ep_addr = IF0_IN_EP_ADDR,
     },
 };
@@ -214,6 +277,8 @@ static void loopback_status_cb(struct usb_cfg_data *cfg, enum usb_dc_status_code
 }
 
 static int loopback_vendor_handler(struct usb_setup_packet *setup, int32_t *len, uint8_t **data) {
+    int res            = -1;
+    uint32_t ret_bytes = 0;
     LOG_INF("Class request: bRequest 0x%x bmRequestType 0x%x len %d", setup->bRequest,
             setup->bmRequestType, *len);
 
@@ -231,8 +296,16 @@ static int loopback_vendor_handler(struct usb_setup_packet *setup, int32_t *len,
         switch (test_mode) {
         case LOOPBACK_BULK:
             LOG_INF("Test mode: loopback bulk");
-            usb_transfer(IF0_OUT_EP_ADDR, loopback_buf, test_pkt_sz,
-                         USB_TRANS_READ | USB_TRANS_NO_ZLP, xfer_cb, (void *)0);
+            while (res < 0 || ret_bytes == 0) {
+                uint32_t ret_bytes;
+                ++counter;
+                res = usb_read(IF0_OUT_EP_ADDR, loopback_buf, test_pkt_sz, &ret_bytes);
+                k_yield();
+                if (ret_bytes) {
+                    LOG_INF("res: %d ret_bytes: %d", res, ret_bytes);
+                    assert(ret_bytes == test_pkt_sz);
+                }
+            }
             break;
         case OUT_BULK:
             LOG_INF("Test mode: out bulk");
