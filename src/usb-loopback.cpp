@@ -27,7 +27,7 @@ enum test_mode_t : uint16_t {
     IN_BULK,
 };
 
-test_mode_t test_mode = INVALID_MODE;
+static test_mode_t test_mode = INVALID_MODE;
 
 __attribute__((aligned(4))) static uint8_t loopback_buf[CONFIG_JS2232_BULK_EP_MPS];
 BUILD_ASSERT(sizeof(loopback_buf) == CONFIG_JS2232_BULK_EP_MPS);
@@ -120,13 +120,13 @@ static void invert_buf(uint8_t *buf, uint16_t len) {
         ++p8;
         len -= sizeof(*p8);
     }
-    uint32_t *p32 = (uint32_t *)p8;
+    uint32_t *p32 = (uint32_t *)__builtin_assume_aligned(p8, 4);
     while (len >= 4) {
         *p32 = *p32 ^ 0xffffffff;
         ++p32;
         len -= sizeof(*p32);
     }
-    p8 = (uint8_t *)p32;
+    p8 = (uint8_t *)__builtin_assume_aligned(p32, 4);
     while (len) {
         *p8 = *p8 ^ 0xff;
         ++p8;
@@ -134,9 +134,8 @@ static void invert_buf(uint8_t *buf, uint16_t len) {
     }
 }
 
-void invert_buf_align32(uint8_t *buf, uint32_t len) {
-    __builtin_assume_aligned(buf, 4);
-    uint32_t *p32 = (uint32_t *)buf;
+static void invert_buf_align32(uint8_t *buf, uint32_t len) {
+    uint32_t *p32 = (uint32_t *)__builtin_assume_aligned(buf, 4);
     while (len >= 4) {
         *p32 = *p32 ^ 0xffffffff;
         ++p32;
