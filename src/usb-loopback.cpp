@@ -153,26 +153,26 @@ static void xfer_rx_cb(uint8_t ep, enum usb_dc_ep_cb_status_code status) {
         res = usb_read(IF0_OUT_EP_ADDR, loopback_buf, 64, &ret_bytes);
         // assert(!res && ret_bytes == 64);
         if (res || ret_bytes != 64) {
-            LOG_INF("read fail res: %d ret_bytes: %u", res, ret_bytes);
+            // LOG_INF("read fail res: %d ret_bytes: %u", res, ret_bytes);
         }
         invert_buf_align32(loopback_buf, 64);
         res = usb_write(IF0_IN_EP_ADDR, loopback_buf, 64, &ret_bytes);
         // assert(res == 0 && ret_bytes == 64);
         if (res || ret_bytes != 64) {
-            LOG_INF("write fail res: %d ret_bytes: %u", res, ret_bytes);
+            // LOG_INF("write fail res: %d ret_bytes: %u", res, ret_bytes);
         }
         break;
     case OUT_BULK:
         res = usb_read(IF0_OUT_EP_ADDR, loopback_buf, 64, &ret_bytes);
         if (res || ret_bytes != 64) {
-            LOG_INF("read fail res: %d ret_bytes: %u", res, ret_bytes);
+            // LOG_INF("read fail res: %d ret_bytes: %u", res, ret_bytes);
         }
         break;
     case IN_BULK:
-        assert(!"Invalid test mode");
+        // assert(!"Invalid test mode");
         break;
     default:
-        assert(!"Invalid test mode");
+        // assert(!"Invalid test mode");
         break;
     }
 }
@@ -185,16 +185,16 @@ static void xfer_tx_cb(uint8_t ep, enum usb_dc_ep_cb_status_code status) {
     case LOOPBACK_BULK:
         break;
     case OUT_BULK:
-        assert(!"Invalid test mode");
+        // assert(!"Invalid test mode");
         break;
     case IN_BULK:
         res = usb_write(IF0_IN_EP_ADDR, loopback_buf, 64, &ret_bytes);
         if (res || ret_bytes != 64) {
-            LOG_INF("write fail res: %d ret_bytes: %u", res, ret_bytes);
+            // LOG_INF("write fail res: %d ret_bytes: %u", res, ret_bytes);
         }
         break;
     default:
-        assert(!"Invalid test mode");
+        // assert(!"Invalid test mode");
         break;
     }
 }
