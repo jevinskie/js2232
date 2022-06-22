@@ -7,8 +7,6 @@ from enum import IntEnum
 
 import usb1
 
-PACKET_SIZE = 64
-
 REQ_SET_TEST_MODE = 0x42
 REQ_SET_PACKET_SZ = 0x43
 
@@ -40,11 +38,8 @@ def main(args):
         assert handle
         handle.setAutoDetachKernelDriver(True)
         cfg0 = next(dev.iterConfigurations())
-        print(f"cfg0: {cfg0}")
         interface = cfg0[args.interface]
-        print(f"interface: {interface}")
         setting = interface[0]
-        print(f"setting: {setting}")
         if args.in_test:
             in_ep = setting[0]
             assert in_ep.getAddress() & 0x80
@@ -62,10 +57,6 @@ def main(args):
                 else:
                     in_ep = ep
                     in_ep_addr = ep.getAddress() ^ 0x80
-        if out_ep:
-            print(f"out_ep: {out_ep_addr:#04x}")
-        if in_ep:
-            print(f"in_ep: {in_ep_addr:#04x}")
         with handle.claimInterface(args.interface):
             if out_ep:
                 handle.clearHalt(out_ep.getAddress())
@@ -83,7 +74,7 @@ def main(args):
             handle.controlWrite(
                 usb1.RECIPIENT_DEVICE | usb1.REQUEST_TYPE_VENDOR,
                 REQ_SET_PACKET_SZ,
-                PACKET_SIZE,
+                args.pkt_sz,
                 0,
                 b"",
                 timeout=100,
@@ -100,10 +91,10 @@ def main(args):
             tstart = time.time()
             try:
                 while True:
-                    obuf = bytearray(random.randbytes(PACKET_SIZE))
+                    obuf = bytearray(random.randbytes(args.pkt_sz))
                     # print(f"obuf: {obuf.hex(' ')}")
                     handle.bulkWrite(out_ep_addr, obuf, timeout=1000)
-                    ibuf = handle.bulkRead(in_ep_addr, PACKET_SIZE, timeout=1000)
+                    ibuf = handle.bulkRead(in_ep_addr, args.pkt_sz, timeout=1000)
                     ibuf_inv = bytes([b ^ 0xFF for b in ibuf])
                     # print(f"Ibuf: {ibuf_inv.hex(' ')}")
                     assert ibuf_inv == obuf
