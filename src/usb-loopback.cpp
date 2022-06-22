@@ -152,6 +152,7 @@ void invert_buf_align32(uint8_t *buf, uint32_t len) {
 
 void xfer_cb(uint8_t ep, int tsize, void *was_in) {
     // LOG_INF("ep: %d sz: %d priv: %d", ep, tsize, (int)was_in);
+    assert(tsize == sizeof(loopback_buf));
     switch (test_mode) {
     case LOOPBACK_BULK:
         if (!was_in) {
@@ -230,18 +231,18 @@ static int loopback_vendor_handler(struct usb_setup_packet *setup, int32_t *len,
         switch (test_mode) {
         case LOOPBACK_BULK:
             LOG_INF("Test mode: loopback bulk");
-            usb_transfer(1, loopback_buf, test_pkt_sz, USB_TRANS_READ | USB_TRANS_NO_ZLP, xfer_cb,
-                         (void *)0);
+            usb_transfer(IF0_OUT_EP_ADDR, loopback_buf, test_pkt_sz,
+                         USB_TRANS_READ | USB_TRANS_NO_ZLP, xfer_cb, (void *)0);
             break;
         case OUT_BULK:
             LOG_INF("Test mode: out bulk");
-            usb_transfer(1, loopback_buf, test_pkt_sz, USB_TRANS_READ | USB_TRANS_NO_ZLP, xfer_cb,
-                         (void *)0);
+            usb_transfer(IF0_OUT_EP_ADDR, loopback_buf, test_pkt_sz,
+                         USB_TRANS_READ | USB_TRANS_NO_ZLP, xfer_cb, (void *)0);
             break;
         case IN_BULK:
             LOG_INF("Test mode: in bulk");
-            usb_transfer(0x81, loopback_buf, test_pkt_sz, USB_TRANS_WRITE | USB_TRANS_NO_ZLP,
-                         xfer_cb, (void *)1);
+            usb_transfer(IF0_IN_EP_ADDR, loopback_buf, test_pkt_sz,
+                         USB_TRANS_WRITE | USB_TRANS_NO_ZLP, xfer_cb, (void *)1);
             break;
         default:
             assert(!"Invalid test mode");

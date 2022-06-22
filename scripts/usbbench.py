@@ -101,7 +101,7 @@ def main(args):
                     nbytes += len(obuf) * 2
                     if nbytes % (16 * 1024) == 0:
                         print(".", end="", flush=True)
-                    time.sleep(0.001)
+                    # time.sleep(0.01)
             except KeyboardInterrupt:
                 pass
             tend = time.time()
