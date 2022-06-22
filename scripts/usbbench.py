@@ -41,23 +41,16 @@ def main(args):
         cfg0 = next(handle.getDevice().iterConfigurations())
         interface = cfg0[args.interface]
         setting = interface[0]
-        if args.in_test:
-            in_ep = setting[0]
-            assert in_ep.getAddress() & 0x80
-        elif args.out_test:
-            out_ep = setting[0]
-            assert not out_ep.getAddress() & 0x80
-        else:
-            in_ep, out_ep = [None] * 2
-            ep_iter = iter(setting)
-            while not all((in_ep, out_ep)):
-                ep = next(ep_iter)
-                if not ep.getAddress() & 0x80:
-                    out_ep = ep
-                    out_ep_addr = ep.getAddress()
-                else:
-                    in_ep = ep
-                    in_ep_addr = ep.getAddress() ^ 0x80
+        in_ep, out_ep = [None] * 2
+        ep_iter = iter(setting)
+        while not all((in_ep, out_ep)):
+            ep = next(ep_iter)
+            if not ep.getAddress() & 0x80:
+                out_ep = ep
+                out_ep_addr = ep.getAddress()
+            else:
+                in_ep = ep
+                in_ep_addr = ep.getAddress() ^ 0x80
         with handle.claimInterface(args.interface):
             if out_ep:
                 handle.clearHalt(out_ep.getAddress())
@@ -66,20 +59,13 @@ def main(args):
             test_mode = test_mode_t.INVALID_MODE
             if args.loop_test:
                 test_mode = test_mode_t.LOOPBACK_BULK
+                assert args.pkt_sz == 64
             elif args.out_test:
                 test_mode = test_mode_t.OUT_BULK
             elif args.in_test:
                 test_mode = test_mode_t.IN_BULK
             else:
                 raise RuntimeError("must select a test mode")
-            handle.controlWrite(
-                usb1.RECIPIENT_DEVICE | usb1.REQUEST_TYPE_VENDOR,
-                REQ_SET_PACKET_SZ,
-                args.pkt_sz,
-                0,
-                b"",
-                timeout=100,
-            )
             handle.controlWrite(
                 usb1.RECIPIENT_DEVICE | usb1.REQUEST_TYPE_VENDOR,
                 REQ_SET_TEST_MODE,
@@ -92,14 +78,22 @@ def main(args):
             tstart = time.time()
             try:
                 while True:
-                    obuf = bytearray(random.randbytes(args.pkt_sz))
-                    # print(f"obuf: {obuf.hex(' ')}")
-                    handle.bulkWrite(out_ep_addr, obuf, timeout=1000)
-                    ibuf = handle.bulkRead(in_ep_addr, args.pkt_sz, timeout=1000)
-                    ibuf_inv = bytes([b ^ 0xFF for b in ibuf])
-                    # print(f"Ibuf: {ibuf_inv.hex(' ')}")
-                    assert ibuf_inv == obuf
-                    nbytes += len(obuf) * 2
+                    if args.loop_test:
+                        obuf = bytearray(random.randbytes(args.pkt_sz))
+                        # print(f"obuf: {obuf.hex(' ')}")
+                        handle.bulkWrite(out_ep_addr, obuf, timeout=1000)
+                        ibuf = handle.bulkRead(in_ep_addr, args.pkt_sz, timeout=1000)
+                        ibuf_inv = bytes([b ^ 0xFF for b in ibuf])
+                        # print(f"Ibuf: {ibuf_inv.hex(' ')}")
+                        assert ibuf_inv == obuf
+                        nbytes += len(obuf) * 2
+                    elif args.out_test:
+                        obuf = bytearray(random.randbytes(args.pkt_sz))
+                        handle.bulkWrite(out_ep_addr, obuf, timeout=1000)
+                        nbytes += len(obuf)
+                    elif args.in_test:
+                        ibuf = handle.bulkRead(in_ep_addr, args.pkt_sz, timeout=1000)
+                        nbytes += len(ibuf)
                     if nbytes % (16 * 1024) == 0:
                         print(".", end="", flush=True)
                     # time.sleep(0.01)

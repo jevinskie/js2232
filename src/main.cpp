@@ -11,7 +11,7 @@ LOG_MODULE_REGISTER(main);
 #define LED0_NODE DT_ALIAS(led0)
 static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(LED0_NODE, gpios);
 
-void main(void) {
+int main(void) {
     int ret;
 
     printk("Hello World! %s\n", CONFIG_BOARD);
@@ -19,25 +19,27 @@ void main(void) {
     ret = usb_enable(nullptr);
     if (ret != 0) {
         LOG_ERR("Failed to enable USB");
-        return;
+        return -1;
     }
 
     LOG_INF("entered main.");
 
     if (!device_is_ready(led.port)) {
-        return;
+        return -1;
     }
 
     ret = gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);
     if (ret < 0) {
-        return;
+        return -1;
     }
 
     while (1) {
         ret = gpio_pin_toggle_dt(&led);
         if (ret < 0) {
-            return;
+            return -1;
         }
         k_msleep(SLEEP_TIME_MS);
     }
+
+    return -1;
 }

@@ -19,8 +19,6 @@ constexpr int IF0_IN_EP_IDX  = 0;
 constexpr int IF0_OUT_EP_IDX = 1;
 
 constexpr uint8_t REQ_SET_TEST_MODE = 0x42;
-constexpr uint8_t REQ_SET_PACKET_SZ = 0x43;
-static uint32_t counter;
 
 enum test_mode_t : uint16_t {
     INVALID_MODE,
@@ -30,10 +28,9 @@ enum test_mode_t : uint16_t {
 };
 
 test_mode_t test_mode = INVALID_MODE;
-uint16_t test_pkt_sz  = 0;
 
-static uint8_t loopback_buf[1024];
-BUILD_ASSERT(sizeof(loopback_buf) == CONFIG_USB_REQUEST_BUFFER_SIZE);
+__attribute__((aligned(4))) static uint8_t loopback_buf[CONFIG_JS2232_BULK_EP_MPS];
+BUILD_ASSERT(sizeof(loopback_buf) == CONFIG_JS2232_BULK_EP_MPS);
 
 struct usb_loopback_config {
     struct usb_if_descriptor if0;
@@ -136,11 +133,7 @@ static void invert_buf(uint8_t *buf, uint16_t len) {
         len -= sizeof(*p8);
     }
 }
-#pragma GCC pop_options
 
-#if 0
-#pragma GCC push_options
-#pragma GCC optimize(2)
 void invert_buf_align32(uint8_t *buf, uint32_t len) {
     __builtin_assume_aligned(buf, 4);
     uint32_t *p32 = (uint32_t *)buf;
@@ -151,35 +144,6 @@ void invert_buf_align32(uint8_t *buf, uint32_t len) {
     }
 }
 #pragma GCC pop_options
-#endif
-
-static void xfer_cb(uint8_t ep, int tsize, void *was_in) {
-    // LOG_INF("ep: %d sz: %d priv: %d", ep, tsize, (int)was_in);
-    assert(tsize == sizeof(loopback_buf));
-    switch (test_mode) {
-    case LOOPBACK_BULK:
-        if (!was_in) {
-            invert_buf(loopback_buf, tsize);
-            usb_transfer(IF0_IN_EP_ADDR, loopback_buf, tsize, USB_TRANS_WRITE | USB_TRANS_NO_ZLP,
-                         xfer_cb, (void *)1);
-        } else {
-            usb_transfer(IF0_OUT_EP_ADDR, loopback_buf, test_pkt_sz,
-                         USB_TRANS_READ | USB_TRANS_NO_ZLP, xfer_cb, (void *)0);
-        }
-        break;
-    case OUT_BULK:
-        usb_transfer(IF0_OUT_EP_ADDR, loopback_buf, test_pkt_sz, USB_TRANS_READ | USB_TRANS_NO_ZLP,
-                     xfer_cb, (void *)0);
-        break;
-    case IN_BULK:
-        usb_transfer(IF0_IN_EP_ADDR, loopback_buf, test_pkt_sz, USB_TRANS_WRITE | USB_TRANS_NO_ZLP,
-                     xfer_cb, (void *)1);
-        break;
-    default:
-        assert(!"Invalid test mode");
-        break;
-    }
-}
 
 static void xfer_rx_cb(uint8_t ep, enum usb_dc_ep_cb_status_code status) {
     int res;
@@ -191,7 +155,7 @@ static void xfer_rx_cb(uint8_t ep, enum usb_dc_ep_cb_status_code status) {
         if (res || ret_bytes != 64) {
             LOG_INF("read fail res: %d ret_bytes: %u", res, ret_bytes);
         }
-        invert_buf(loopback_buf, 64);
+        invert_buf_align32(loopback_buf, 64);
         res = usb_write(IF0_IN_EP_ADDR, loopback_buf, 64, &ret_bytes);
         // assert(res == 0 && ret_bytes == 64);
         if (res || ret_bytes != 64) {
@@ -199,11 +163,9 @@ static void xfer_rx_cb(uint8_t ep, enum usb_dc_ep_cb_status_code status) {
         }
         break;
     case OUT_BULK:
-        while (res < 0 || ret_bytes == 0) {
-            res = usb_read(IF0_OUT_EP_ADDR, loopback_buf, 64, &ret_bytes);
-            if (res >= 0 && ret_bytes) {
-                assert(ret_bytes == test_pkt_sz);
-            }
+        res = usb_read(IF0_OUT_EP_ADDR, loopback_buf, 64, &ret_bytes);
+        if (res || ret_bytes != 64) {
+            LOG_INF("read fail res: %d ret_bytes: %u", res, ret_bytes);
         }
         break;
     case IN_BULK:
@@ -226,11 +188,9 @@ static void xfer_tx_cb(uint8_t ep, enum usb_dc_ep_cb_status_code status) {
         assert(!"Invalid test mode");
         break;
     case IN_BULK:
-        while (res < 0) {
-            res = usb_write(IF0_IN_EP_ADDR, loopback_buf, 64, nullptr);
-            if (res >= 0) {
-                assert(res == 64);
-            }
+        res = usb_write(IF0_IN_EP_ADDR, loopback_buf, 64, &ret_bytes);
+        if (res || ret_bytes != 64) {
+            LOG_INF("write fail res: %d ret_bytes: %u", res, ret_bytes);
         }
         break;
     default:
@@ -287,9 +247,6 @@ static int loopback_vendor_handler(struct usb_setup_packet *setup, int32_t *len,
 
     if (setup->bRequest == REQ_SET_TEST_MODE) {
         test_mode = (test_mode_t)setup->wValue;
-        assert(test_pkt_sz);
-        usb_cancel_transfer(1);
-        usb_cancel_transfer(0x81);
         memset(loopback_buf, 0, sizeof(loopback_buf));
         switch (test_mode) {
         case LOOPBACK_BULK:
@@ -300,19 +257,14 @@ static int loopback_vendor_handler(struct usb_setup_packet *setup, int32_t *len,
             break;
         case IN_BULK:
             LOG_INF("Test mode: in bulk");
+            res = usb_write(IF0_IN_EP_ADDR, loopback_buf, 64, &ret_bytes);
+            if (res || ret_bytes != 64) {
+                LOG_INF("write fail res: %d ret_bytes: %u", res, ret_bytes);
+            }
             break;
         default:
             assert(!"Invalid test mode");
             break;
-        }
-        return 0;
-    } else if (setup->bRequest == REQ_SET_PACKET_SZ) {
-        test_pkt_sz = setup->wValue;
-        LOG_INF("Setting test packet size to %u", test_pkt_sz);
-        if (test_pkt_sz > sizeof(loopback_buf)) {
-            LOG_ERR("Packet size: %u is larger than buffer size %zu", test_pkt_sz,
-                    sizeof(loopback_buf));
-            return -ENOTSUP;
         }
         return 0;
     }
