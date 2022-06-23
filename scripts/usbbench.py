@@ -51,7 +51,6 @@ def main(args):
             else:
                 in_ep = ep
                 in_ep_addr = ep.getAddress() ^ 0x80
-        print(f"in_ep: {in_ep_addr:#04x} out_ep: {out_ep_addr:#04x}")
         with handle.claimInterface(args.interface):
             if out_ep:
                 handle.clearHalt(out_ep.getAddress())
