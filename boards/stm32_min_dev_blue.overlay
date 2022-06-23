@@ -13,4 +13,5 @@
 	pinctrl-0 = <&usb_dm_pa11 &usb_dp_pa12>;
 	pinctrl-1 = <&usb_dm_pa11_gpio_se0 &usb_dp_pa12_gpio_se0>;
 	pinctrl-names = "default", "gpio_se0";
+	num-bidir-endpoints = <3>;
 };

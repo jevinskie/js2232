@@ -20,3 +20,7 @@
 	current-speed = <2000000>;
 	status = "okay";
 };
+
+&usb {
+	num-bidir-endpoints = <3>;
+};

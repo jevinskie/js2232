@@ -1,6 +1,6 @@
-#undef NDEBUG
 #define __ASSERT_ON 1
-#include <assert.h>
+#include <sys/__assert.h>
+#define assert __ASSERT_NO_MSG
 
 #include <zephyr/init.h>
 
@@ -13,7 +13,7 @@
 LOG_MODULE_REGISTER(js2232_usb);
 
 constexpr int IF0_IN_EP_ADDR  = 0x81;
-constexpr int IF0_OUT_EP_ADDR = 0x01;
+constexpr int IF0_OUT_EP_ADDR = 0x02;
 
 constexpr int IF0_IN_EP_IDX  = 0;
 constexpr int IF0_OUT_EP_IDX = 1;
