@@ -59,13 +59,20 @@ def main(args):
             test_mode = test_mode_t.INVALID_MODE
             if args.loop_test:
                 test_mode = test_mode_t.LOOPBACK_BULK
-                assert args.pkt_sz == 64
             elif args.out_test:
                 test_mode = test_mode_t.OUT_BULK
             elif args.in_test:
                 test_mode = test_mode_t.IN_BULK
             else:
                 raise RuntimeError("must select a test mode")
+            handle.controlWrite(
+                usb1.RECIPIENT_DEVICE | usb1.REQUEST_TYPE_VENDOR,
+                REQ_SET_PACKET_SZ,
+                args.pkt_sz,
+                0,
+                b"",
+                timeout=30,
+            )
             handle.controlWrite(
                 usb1.RECIPIENT_DEVICE | usb1.REQUEST_TYPE_VENDOR,
                 REQ_SET_TEST_MODE,
@@ -75,6 +82,7 @@ def main(args):
                 timeout=100,
             )
             nbytes = 0
+            npkt = 0
             tstart = time.time()
             try:
                 while True:
@@ -87,15 +95,20 @@ def main(args):
                         # print(f"Ibuf: {ibuf_inv.hex(' ')}")
                         assert ibuf_inv == obuf
                         nbytes += len(obuf) * 2
+                        npkt += 2
                     elif args.out_test:
                         obuf = bytearray(random.randbytes(args.pkt_sz))
                         handle.bulkWrite(out_ep_addr, obuf, timeout=1000)
                         nbytes += len(obuf)
+                        npkt += 1
                     elif args.in_test:
                         ibuf = handle.bulkRead(in_ep_addr, args.pkt_sz, timeout=1000)
                         nbytes += len(ibuf)
+                        npkt += 1
                     if nbytes % (16 * 1024) == 0:
                         print(".", end="", flush=True)
+                    if args.num is not None and npkt >= args.num:
+                        break
                     # time.sleep(0.01)
             except KeyboardInterrupt:
                 pass
@@ -125,6 +138,7 @@ if __name__ == "__main__":
     parser.add_argument("-P", "--product", default="js2232", help="Product match")
     parser.add_argument("-f", "--interface", type=any_int, default=0, help="Interface number")
     parser.add_argument("-S", "--pkt-sz", type=any_int, default=64, help="Packet size")
+    parser.add_argument("-n", "--num", type=any_int, default=None, help="Packet size")
     parser.add_argument("-I", "--in-ep", type=any_int, default=0x82, help="In endpoint")
     parser.add_argument("-O", "--out-ep", type=any_int, default=0x01, help="Out endpoint")
     parser.add_argument(
