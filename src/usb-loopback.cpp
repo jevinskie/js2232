@@ -165,8 +165,8 @@ static void xfer_rx_cb(uint8_t ep, enum usb_dc_ep_cb_status_code status) {
         }
         break;
     case OUT_BULK:
-        // res = usb_read(IF0_OUT_EP_ADDR, loopback_buf, test_pkt_sz, &ret_bytes);
-        res = usb_read(IF0_OUT_EP_ADDR, nullptr, 0, &ret_bytes);
+        res = usb_read(IF0_OUT_EP_ADDR, loopback_buf, test_pkt_sz, &ret_bytes);
+        // res = usb_read(IF0_OUT_EP_ADDR, nullptr, 0, &ret_bytes);
         LOG_INF("rb: %u", ret_bytes);
         if (res || ret_bytes != test_pkt_sz) {
             // LOG_INF("read fail res: %d ret_bytes: %u", res, ret_bytes);
